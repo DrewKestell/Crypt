@@ -1,0 +1,31 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.30028.174
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Crypt", "Crypt\Crypt.vcxproj", "{471015DA-A953-470B-AB6A-152B434A7768}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|x64 = Debug|x64
+		Debug|x86 = Debug|x86
+		Release|x64 = Release|x64
+		Release|x86 = Release|x86
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{471015DA-A953-470B-AB6A-152B434A7768}.Debug|x64.ActiveCfg = Debug|x64
+		{471015DA-A953-470B-AB6A-152B434A7768}.Debug|x64.Build.0 = Debug|x64
+		{471015DA-A953-470B-AB6A-152B434A7768}.Debug|x86.ActiveCfg = Debug|Win32
+		{471015DA-A953-470B-AB6A-152B434A7768}.Debug|x86.Build.0 = Debug|Win32
+		{471015DA-A953-470B-AB6A-152B434A7768}.Release|x64.ActiveCfg = Release|x64
+		{471015DA-A953-470B-AB6A-152B434A7768}.Release|x64.Build.0 = Release|x64
+		{471015DA-A953-470B-AB6A-152B434A7768}.Release|x86.ActiveCfg = Release|Win32
+		{471015DA-A953-470B-AB6A-152B434A7768}.Release|x86.Build.0 = Release|Win32
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {538CC67E-3995-4136-8D08-F76951B0BA73}
+	EndGlobalSection
+EndGlobal
