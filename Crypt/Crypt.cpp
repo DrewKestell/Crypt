@@ -75,16 +75,19 @@ int main(int argc, char* argv[])
         NULL
     );
 
+    BYTE pwBuffer[32];
+    ZeroMemory(pwBuffer, 32);
+    memcpy(pwBuffer, argv[1], strlen(argv[1]));
     DWORD bytesWritten;
     WriteFile(
         hFile,
-        buffer,
-        dataLength,
+        pwBuffer,
+        32,
         &bytesWritten,
         NULL
     );
 
-    /*SetFilePointer(
+    SetFilePointer(
         hFile,
         32,
         NULL,
@@ -93,9 +96,9 @@ int main(int argc, char* argv[])
 
     WriteFile(
         hFile,
-        pbHash,
+        buffer,
         dwHashLen,
         &bytesWritten,
         NULL
-    );*/
+    );
 }
