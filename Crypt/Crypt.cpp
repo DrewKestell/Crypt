@@ -1,104 +1,59 @@
 #include <Windows.h>
 #include <wincrypt.h>
 #include <stdio.h>
+#include "CryptWrapper.h"
 
 int main(int argc, char* argv[])
 {
-    HCRYPTPROV hCryptProv;
-    HCRYPTHASH hHash;
-    HCRYPTKEY hKey;
+    printf("Crypt.exe v1.0\n");
 
-    CryptAcquireContext(
-        &hCryptProv,
-        NULL,
-        NULL,
-        PROV_RSA_FULL,
-        0);
+    if (argc == 1 || (strcmp(argv[1], "e") && strcmp(argv[1], "d")) || (!strcmp(argv[1], "e") && argc != 5) || (!strcmp(argv[1], "d") && argc != 4))
+    {
+        printf("ERROR: Incorrect usage. Use e to encrypt, or d to decrypt.\n");
+        printf("Crypt e <password> <filename> <content>\n");
+        printf("Crypt d <password> <filename>\n");
+        return 1;
+    }
 
-    CryptCreateHash(
-        hCryptProv,
-        CALG_MD5,
-        0,
-        0,
-        &hHash);
+    CryptWrapper cryptWrapper;
 
-    CryptHashData(
-        hHash,
-        (BYTE*)argv[1],
-        strlen(argv[1]),
-        CRYPT_USERDATA
-    );
+    const char* commandArg = argv[1];
+    const char* passwordArg = argv[2];
+    const char* filenameArg = argv[3];
 
-    CryptDeriveKey(
-        hCryptProv,
-        CALG_RC2,
-        hHash,
-        CRYPT_NO_SALT,
-        &hKey);
+    if (!strcmp(commandArg, "e"))
+    {
+        printf("Starting encryption...\n");
 
-    DWORD dwHashLen = strlen(argv[3]);
-    auto res = CryptEncrypt(
-        hKey,
-        NULL,
-        true,
-        0,
-        NULL,
-        &dwHashLen,
-        NULL);
+        const auto passwordLength = strlen(passwordArg);
+        if (passwordLength < 4 || passwordLength > 32)
+        {
+            printf("ERROR: Password must be between 4 and 32 characters in length.\n");
+            return 1;
+        }
 
-    BYTE* buffer = new BYTE[dwHashLen];
-    ZeroMemory(buffer, dwHashLen);
-    memcpy(buffer, argv[3], strlen(argv[3]));
+        const char* contentArg = argv[4];
+        const auto contentLength = strlen(contentArg);
+        if (contentLength < 1 || contentLength > 100)
+        {
+            printf("ERROR: Content must be between 1 and 100 characters in length.\n");
+            return 1;
+        }
 
-    DWORD dataLength = strlen(argv[3]);
-    CryptEncrypt(
-        hKey,
-        NULL,
-        true,
-        0,
-        buffer,
-        &dataLength,
-        dwHashLen);
+        cryptWrapper.Encrypt(passwordArg, filenameArg, contentArg);
 
-    CryptDestroyKey(hKey);
-    CryptDestroyHash(hHash);
-    CryptReleaseContext(hCryptProv, 0);
+        printf("Encryption complete!\n");
+    }
+    else if (!strcmp(commandArg, "d"))
+    {
+        printf("Starting decryption...\n");
 
-    HANDLE hFile;
-    hFile = CreateFileA(
-        argv[2],
-        GENERIC_READ | GENERIC_WRITE,
-        0,
-        NULL,
-        CREATE_ALWAYS,
-        FILE_ATTRIBUTE_NORMAL,
-        NULL
-    );
+        bool success;
+        auto content = cryptWrapper.Decrypt(passwordArg, filenameArg, success);
 
-    BYTE pwBuffer[32];
-    ZeroMemory(pwBuffer, 32);
-    memcpy(pwBuffer, argv[1], strlen(argv[1]));
-    DWORD bytesWritten;
-    WriteFile(
-        hFile,
-        pwBuffer,
-        32,
-        &bytesWritten,
-        NULL
-    );
+        if (success)
+            printf("Decryption successful! Archive contains the following content:\n");
 
-    SetFilePointer(
-        hFile,
-        32,
-        NULL,
-        0
-    );
-
-    WriteFile(
-        hFile,
-        buffer,
-        dwHashLen,
-        &bytesWritten,
-        NULL
-    );
+        printf("%s\n", content.c_str());
+    }
 }
