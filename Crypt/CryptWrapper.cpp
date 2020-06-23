@@ -8,7 +8,16 @@ CryptWrapper::CryptWrapper()
 
 void CryptWrapper::Encrypt(const char* passwordArg, const char* filenameArg, const char* contentArg)
 {
+	BYTE* encryptedPasswordBuffer = new BYTE[strlen(passwordArg)];
+
 	CryptHashData(hHash, (BYTE*)passwordArg, strlen(passwordArg), CRYPT_USERDATA);
+	DWORD dwHashLen1;
+	DWORD dwHashLenSize1;
+	CryptGetHashParam(hHash, HP_HASHSIZE, (BYTE*)&dwHashLen1, &dwHashLenSize1, 0);
+
+	BYTE* hashBuffer = new BYTE[dwHashLen1];
+	CryptGetHashParam(hHash, HP_HASHVAL, hashBuffer, &dwHashLen1, 0);
+
 	CryptDeriveKey(hCryptProv, CALG_RC2, hHash, CRYPT_NO_SALT, &hKey);
 
 	// first call CryptEncrypt without providing content.
