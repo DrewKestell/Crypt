@@ -8,41 +8,30 @@ CryptWrapper::CryptWrapper()
 
 void CryptWrapper::Encrypt(const char* passwordArg, const char* filenameArg, const char* contentArg)
 {
-	BYTE* encryptedPasswordBuffer = new BYTE[strlen(passwordArg)];
+	const auto passwordArgLen = strlen(passwordArg);
+	const auto contentArgLen = strlen(contentArg);
 
-	CryptHashData(hHash, (BYTE*)passwordArg, strlen(passwordArg), CRYPT_USERDATA);
-	DWORD dwHashLen1;
-	DWORD dwHashLenSize1;
-	CryptGetHashParam(hHash, HP_HASHSIZE, (BYTE*)&dwHashLen1, &dwHashLenSize1, 0);
-
-	BYTE* hashBuffer = new BYTE[dwHashLen1];
-	CryptGetHashParam(hHash, HP_HASHVAL, hashBuffer, &dwHashLen1, 0);
-
+	// create session key that we'll use for encryption
+	CryptHashData(hHash, (BYTE*)ENCRYPTION_KEY, ENCRYPTION_KEY_LEN, CRYPT_USERDATA);
 	CryptDeriveKey(hCryptProv, CALG_RC2, hHash, CRYPT_NO_SALT, &hKey);
 
-	// first call CryptEncrypt without providing content.
-	// this will return the required buffer size for the encrypted content in dwHashLen.
-	DWORD dwHashLen = strlen(contentArg);
-	CryptEncrypt(hKey, 0, true, 0, 0, &dwHashLen, 0);
+	// determine size of encrypted password
+	DWORD dwPasswordBufferLen = passwordArgLen;
+	CryptEncrypt(hKey, 0, true, 0, 0, &dwPasswordBufferLen, 0);
 
-	// next create a buffer with the size retrieved above
-	BYTE* buffer = new BYTE[dwHashLen];
-	ZeroMemory(buffer, dwHashLen);
-	memcpy(buffer, contentArg, strlen(contentArg));
+	// encrypt the password and store in passwordBuffer
+	BYTE* passwordBuffer = new BYTE[dwPasswordBufferLen];
+	ZeroMemory(passwordBuffer, dwPasswordBufferLen);
+	memcpy(passwordBuffer, passwordArg, passwordArgLen);
+	DWORD passwordLength = passwordArgLen;
+	CryptEncrypt(hKey, 0, true, 0, passwordBuffer, &passwordLength, dwPasswordBufferLen);
 
-	// finally call CryptEncrypt to actually encrypt the content
-	DWORD dataLength = strlen(contentArg);
-	CryptEncrypt(hKey, 0, true, 0, buffer, &dataLength, dwHashLen);
+	// copy encrypted password into 64 byte buffer so we always write 64 bytes to the file (padded with 0s)
+	BYTE* encryptedPasswordBuffer = new BYTE[PASSWORD_BUFFER_LEN];
+	ZeroMemory(encryptedPasswordBuffer, PASSWORD_BUFFER_LEN);
+	memcpy(encryptedPasswordBuffer, passwordBuffer, dwPasswordBufferLen);
 
-	CryptDestroyKey(hKey);
-
-	// now save the password and encrypted content in the file.
-	// our implementation is simple, and it will overwrite the
-	//   file if it already exists.
-	// we should also NOT be storing the unencrypted password
-	//   here, but the purpose of the exercise is to show how
-	//   this flaw can be discovered and abused through
-	//   reverse engineering.
+	// create the file (naive implementation will recreate the file even if it already exists)
 	auto hFile = CreateFileA(
 		filenameArg,
 		GENERIC_READ | GENERIC_WRITE,
@@ -52,31 +41,43 @@ void CryptWrapper::Encrypt(const char* passwordArg, const char* filenameArg, con
 		FILE_ATTRIBUTE_NORMAL,
 		0);
 
-	// write password to file
-	BYTE pwBuffer[32];
-	ZeroMemory(pwBuffer, 32);
-	memcpy(pwBuffer, passwordArg, strlen(passwordArg));
-	DWORD bytesWritten;
-	WriteFile(hFile, pwBuffer, 32, &bytesWritten, 0);
+	// write encrypted password to file
+	DWORD bytesWritten = 0;
+	WriteFile(hFile, encryptedPasswordBuffer, PASSWORD_BUFFER_LEN, &bytesWritten, 0);
 
-	SetFilePointer(hFile, 32, 0, 0);
+	// move file pointer ahead to immediately after the encrypted password
+	SetFilePointer(hFile, PASSWORD_BUFFER_LEN, 0, 0);
+
+	// determine size of encrypted conctent
+	DWORD dwContentBufferLen = contentArgLen;
+	CryptEncrypt(hKey, 0, true, 0, 0, &dwContentBufferLen, 0);
+
+	// encrypt the content and store in contentBuffer
+	BYTE* contentBuffer = new BYTE[dwContentBufferLen];
+	ZeroMemory(contentBuffer, dwContentBufferLen);
+	memcpy(contentBuffer, contentArg, contentArgLen);
+	DWORD dataLength = contentArgLen;
+	CryptEncrypt(hKey, 0, true, 0, contentBuffer, &dataLength, dwContentBufferLen);
 
 	// write encrypted content to file
-	WriteFile(hFile, buffer, dwHashLen, &bytesWritten, 0);
+	WriteFile(hFile, contentBuffer, dwContentBufferLen, &bytesWritten, 0);
+
+	CryptDestroyKey(hKey);
+
+	printf("Encryption complete!\n");
 }
 
-std::string CryptWrapper::Decrypt(const char* passwordArg, const char* filenameArg, bool& success)
+void CryptWrapper::Decrypt(const char* passwordArg, const char* filenameArg)
 {
 	OFSTRUCT of = { 0 };
 	of.cBytes = sizeof(of);
 
 	// first check to see if the file exists. if not, return an empty string;
 	const auto hFile = OpenFile(filenameArg, &of, OF_EXIST);
-
 	if (hFile == -1)
 	{
-		success = false;
-		return "ERROR: File not found.";
+		printf("ERROR: File not found.");
+		return;
 	}
 
 	// if it exists, open it for reading
@@ -89,35 +90,46 @@ std::string CryptWrapper::Decrypt(const char* passwordArg, const char* filenameA
 		FILE_ATTRIBUTE_NORMAL,
 		0);
 
-	// first, read the first 32 bytes from the archive to retrieve the password
-	DWORD bytesRead;
-	BYTE passwordBuffer[32];
-	ZeroMemory(passwordBuffer, 32);
-	ReadFile(fileHandle, passwordBuffer, 32, &bytesRead, 0);
+	// create session key that we'll use for decryption
+	CryptHashData(hHash, (BYTE*)ENCRYPTION_KEY, ENCRYPTION_KEY_LEN, CRYPT_USERDATA);
+	CryptDeriveKey(hCryptProv, CALG_RC2, hHash, CRYPT_NO_SALT, &hKey);
 
-	const char* password = reinterpret_cast<const char*>(passwordBuffer);
-	if (strcmp(password, passwordArg))
+	// read the first 64 bytes from the archive to retrieve the password
+	DWORD bytesRead = 0;
+	BYTE passwordBuffer[PASSWORD_BUFFER_LEN];
+	ZeroMemory(passwordBuffer, PASSWORD_BUFFER_LEN);
+	ReadFile(fileHandle, passwordBuffer, PASSWORD_BUFFER_LEN, &bytesRead, 0);
+
+	// decrypt the password
+	DWORD passwordBufferLen = strlen((const char*)passwordBuffer);
+	CryptDecrypt(hKey, hHash, true, 0, passwordBuffer, &passwordBufferLen);
+
+	// the decrypted password will be shorter than the encrypted password,
+	// so truncate the string and compare with the provided passwordArg
+	char* decryptedPassword = reinterpret_cast<char*>(passwordBuffer);
+	decryptedPassword[strlen(decryptedPassword) - passwordBufferLen] = 0;
+	if (strcmp(decryptedPassword, passwordArg))
 	{
-		success = false;
-		return "ERROR: Invalid password.";
+		printf("ERROR: Invalid password.");
+		return;
 	}
 
-	SetFilePointer(fileHandle, 32, 0, 0);
+	// move file pointer to immediately following the password
+	SetFilePointer(fileHandle, PASSWORD_BUFFER_LEN, 0, 0);
 
-	// if the password is correct, read the encrypted bytes from the file
+	// read the encrypted content from the file
 	BYTE contentBuffer[200];
 	ZeroMemory(contentBuffer, 200);
 	ReadFile(fileHandle, contentBuffer, 200, &bytesRead, 0);
 
 	// then decrypt the data
-	CryptHashData(hHash, (BYTE*)passwordArg, strlen(passwordArg), CRYPT_USERDATA);
-	CryptDeriveKey(hCryptProv, CALG_RC2, hHash, CRYPT_NO_SALT, &hKey);
 	DWORD contentBufferLen{ strlen(reinterpret_cast<const char*>(contentBuffer)) };
 	CryptDecrypt(hKey, hHash, true, 0, contentBuffer, &contentBufferLen);
 
 	auto content = reinterpret_cast<const char*>(contentBuffer);
-	success = true;
-	return std::string(content, contentBufferLen);
+
+	printf("Decryption successful! Archive contains the following content:\n");
+	printf("%s\n", content);
 }
 
 CryptWrapper::~CryptWrapper()
