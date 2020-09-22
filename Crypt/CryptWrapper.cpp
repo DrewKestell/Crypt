@@ -76,7 +76,7 @@ void CryptWrapper::Decrypt(const char* passwordArg, const char* filenameArg)
 	const auto hFile = OpenFile(filenameArg, &of, OF_EXIST);
 	if (hFile == -1)
 	{
-		printf("ERROR: File not found.");
+		printf("ERROR: File not found.\n");
 		return;
 	}
 
@@ -101,16 +101,16 @@ void CryptWrapper::Decrypt(const char* passwordArg, const char* filenameArg)
 	ReadFile(fileHandle, passwordBuffer, PASSWORD_BUFFER_LEN, &bytesRead, 0);
 
 	// decrypt the password
-	DWORD passwordBufferLen = strlen((const char*)passwordBuffer);
+	DWORD passwordBufferLen = PASSWORD_BUFFER_LEN;
 	CryptDecrypt(hKey, hHash, true, 0, passwordBuffer, &passwordBufferLen);
 
 	// the decrypted password will be shorter than the encrypted password,
 	// so truncate the string and compare with the provided passwordArg
-	char* decryptedPassword = reinterpret_cast<char*>(passwordBuffer);
-	decryptedPassword[strlen(decryptedPassword) - passwordBufferLen] = 0;
+	auto decryptedPassword = reinterpret_cast<char*>(passwordBuffer);
+	decryptedPassword[strlen(passwordArg)] = 0;
 	if (strcmp(decryptedPassword, passwordArg))
 	{
-		printf("ERROR: Invalid password.");
+		printf("ERROR: Invalid password.\n");
 		return;
 	}
 
@@ -118,15 +118,16 @@ void CryptWrapper::Decrypt(const char* passwordArg, const char* filenameArg)
 	SetFilePointer(fileHandle, PASSWORD_BUFFER_LEN, 0, 0);
 
 	// read the encrypted content from the file
-	BYTE contentBuffer[200];
-	ZeroMemory(contentBuffer, 200);
-	ReadFile(fileHandle, contentBuffer, 200, &bytesRead, 0);
+	BYTE contentBuffer[CONTENT_BUFFER_LEN];
+	ZeroMemory(contentBuffer, CONTENT_BUFFER_LEN);
+	ReadFile(fileHandle, contentBuffer, CONTENT_BUFFER_LEN, &bytesRead, 0);
 
 	// then decrypt the data
-	DWORD contentBufferLen{ strlen(reinterpret_cast<const char*>(contentBuffer)) };
+	DWORD contentBufferLen = bytesRead;
 	CryptDecrypt(hKey, hHash, true, 0, contentBuffer, &contentBufferLen);
 
-	auto content = reinterpret_cast<const char*>(contentBuffer);
+	auto content = reinterpret_cast<char*>(contentBuffer);
+	content[contentBufferLen] = 0;
 
 	printf("Decryption successful! Archive contains the following content:\n");
 	printf("%s\n", content);

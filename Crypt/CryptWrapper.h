@@ -7,6 +7,7 @@
 static const char* ENCRYPTION_KEY = "6d6e976t2wrvg7xz";
 static const int ENCRYPTION_KEY_LEN = 16;
 static const int PASSWORD_BUFFER_LEN = 64;
+static const int CONTENT_BUFFER_LEN = 200;
 
 class CryptWrapper
 {
